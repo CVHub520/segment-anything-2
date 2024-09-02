@@ -1,4 +1,13 @@
-# SAM 2: Segment Anything in Images and Videos
+# SAM 2: Segment Anything in Images, Videos and Camera
+
+
+<img src="https://github.com/user-attachments/assets/0b1e3c69-a800-4497-9bad-4332c1ce1ebf" width="100%" />
+<div align="center"><strong><a href="https://github.com/CVHub520/X-AnyLabeling">Experience the Power of Auto-Labeling with X-AnyLabeling – Try It Now!</a></strong></div>
+
+</br>
+
+<details>
+  <summary>Click to expand</summary>
 
 **[AI at Meta, FAIR](https://ai.meta.com/research/)**
 
