@@ -55,10 +55,10 @@ class SAM2CameraPredictor(SAM2Base):
                 np.array(img.convert("RGB").resize((image_size, image_size))) / 255.0
             )
             width, height = img.size
-        img = torch.from_numpy(img_np).permute(2, 0, 1).float()
+        img = torch.from_numpy(img_np).permute(2, 0, 1).float().to(self.condition_state['device'])
 
-        img_mean = torch.tensor(img_mean, dtype=torch.float32)[:, None, None]
-        img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None]
+        img_mean = torch.tensor(img_mean, dtype=torch.float32)[:, None, None].to(self.condition_state['device'])
+        img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None].to(self.condition_state['device'])
         img -= img_mean
         img /= img_std
         return img, width, height
@@ -89,6 +89,7 @@ class SAM2CameraPredictor(SAM2Base):
         offload_video_to_cpu=False,
         offload_state_to_cpu=False,
     ):
+        compute_device = self.device # device of the model
         self.condition_state = {}
 
         # whether to offload the video frames to CPU memory
@@ -101,11 +102,11 @@ class SAM2CameraPredictor(SAM2Base):
         self.condition_state["offload_state_to_cpu"] = offload_state_to_cpu
         # the original video height and width, used for resizing final output scores
 
-        self.condition_state["device"] = torch.device("cuda")
+        self.condition_state["device"] = compute_device
         if offload_state_to_cpu:
             self.condition_state["storage_device"] = torch.device("cpu")
         else:
-            self.condition_state["storage_device"] = torch.device("cuda")
+            self.condition_state["storage_device"] = compute_device
         # inputs on each frame
         self.condition_state["point_inputs_per_obj"] = {}
         self.condition_state["mask_inputs_per_obj"] = {}
@@ -266,7 +267,8 @@ class SAM2CameraPredictor(SAM2Base):
                 prev_out = obj_output_dict["non_cond_frame_outputs"].get(frame_idx)
 
         if prev_out is not None and prev_out["pred_masks"] is not None:
-            prev_sam_mask_logits = prev_out["pred_masks"].cuda(non_blocking=True)
+            device = self.condition_state["device"]
+            prev_sam_mask_logits = prev_out["pred_masks"].to(device, non_blocking=True)
             # Clamp the scale of prev_sam_mask_logits to avoid rare numerical issues.
             prev_sam_mask_logits = torch.clamp(prev_sam_mask_logits, -32.0, 32.0)
         current_out, _ = self._run_single_frame_inference(
@@ -373,7 +375,8 @@ class SAM2CameraPredictor(SAM2Base):
                 prev_out = obj_output_dict["non_cond_frame_outputs"].get(frame_idx)
 
         if prev_out is not None and prev_out["pred_masks"] is not None:
-            prev_sam_mask_logits = prev_out["pred_masks"].cuda(non_blocking=True)
+            device = self.condition_state["device"]
+            prev_sam_mask_logits = prev_out["pred_masks"].to(device, non_blocking=True)
             # Clamp the scale of prev_sam_mask_logits to avoid rare numerical issues.
             prev_sam_mask_logits = torch.clamp(prev_sam_mask_logits, -32.0, 32.0)
         current_out, _ = self._run_single_frame_inference(
@@ -888,8 +891,9 @@ class SAM2CameraPredictor(SAM2Base):
         )
         if backbone_out is None:
             # Cache miss -- we will run inference on a single image
+            device = self.condition_state["device"]
             image = (
-                self.condition_state["images"][frame_idx].cuda().float().unsqueeze(0)
+                self.condition_state["images"][frame_idx].to(device).float().unsqueeze(0)
             )
             backbone_out = self.forward_image(image)
             # Cache the most recent frame's feature (for repeated interactions with
@@ -915,7 +919,8 @@ class SAM2CameraPredictor(SAM2Base):
         return features
 
     def _get_feature(self, img, batch_size):
-        image = img.cuda().float().unsqueeze(0)
+        device = self.condition_state["device"]
+        image = img.to(device).float().unsqueeze(0)
         backbone_out = self.forward_image(image)
         expanded_image = image.expand(batch_size, -1, -1, -1)
         expanded_backbone_out = {
